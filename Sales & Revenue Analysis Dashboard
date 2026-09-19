@@ -1,0 +1,287 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from io import StringIO
+
+# -------------------------------------------------
+# PAGE CONFIGURATION
+# -------------------------------------------------
+st.set_page_config(
+    page_title="Sales & Revenue Dashboard",
+    page_icon="📊",
+    layout="wide"
+)
+
+st.title("📊 Sales & Revenue Analysis Dashboard")
+st.markdown("Analyze sales, revenue, products and business performance.")
+
+# -------------------------------------------------
+# SAMPLE DATA
+# -------------------------------------------------
+data = """
+Date,Product,Category,Region,Quantity,Sales,Cost
+2026-01-05,Laptop,Electronics,North,5,250000,200000
+2026-01-08,Mobile,Electronics,South,10,180000,140000
+2026-01-12,Headphones,Accessories,East,20,60000,40000
+2026-01-18,Keyboard,Accessories,West,15,45000,30000
+2026-02-03,Laptop,Electronics,South,7,350000,280000
+2026-02-10,Mobile,Electronics,North,12,216000,168000
+2026-02-15,Mouse,Accessories,East,25,37500,25000
+2026-02-22,Monitor,Electronics,West,8,160000,120000
+2026-03-04,Laptop,Electronics,East,6,300000,240000
+2026-03-11,Mobile,Electronics,West,15,270000,210000
+2026-03-17,Headphones,Accessories,North,30,90000,60000
+2026-03-25,Keyboard,Accessories,South,20,60000,40000
+2026-04-02,Monitor,Electronics,North,10,200000,150000
+2026-04-09,Mobile,Electronics,East,18,324000,252000
+2026-04-16,Mouse,Accessories,West,35,52500,35000
+2026-04-25,Laptop,Electronics,South,9,450000,360000
+2026-05-03,Mobile,Electronics,North,20,360000,280000
+2026-05-12,Monitor,Electronics,East,12,240000,180000
+2026-05-20,Headphones,Accessories,West,25,75000,50000
+2026-05-28,Keyboard,Accessories,South,30,90000,60000
+2026-06-05,Laptop,Electronics,West,8,400000,320000
+2026-06-14,Mobile,Electronics,South,22,396000,308000
+2026-06-20,Mouse,Accessories,North,40,60000,40000
+2026-06-27,Monitor,Electronics,East,15,300000,225000
+"""
+
+df = pd.read_csv(StringIO(data))
+df["Date"] = pd.to_datetime(df["Date"])
+
+# -------------------------------------------------
+# CALCULATIONS
+# -------------------------------------------------
+df["Profit"] = df["Sales"] - df["Cost"]
+df["Month"] = df["Date"].dt.strftime("%B")
+df["Month_Number"] = df["Date"].dt.month
+
+# -------------------------------------------------
+# SIDEBAR FILTERS
+# -------------------------------------------------
+st.sidebar.header("🔎 Filters")
+
+regions = st.sidebar.multiselect(
+    "Select Region",
+    options=df["Region"].unique(),
+    default=df["Region"].unique()
+)
+
+categories = st.sidebar.multiselect(
+    "Select Category",
+    options=df["Category"].unique(),
+    default=df["Category"].unique()
+)
+
+products = st.sidebar.multiselect(
+    "Select Product",
+    options=df["Product"].unique(),
+    default=df["Product"].unique()
+)
+
+filtered_df = df[
+    (df["Region"].isin(regions)) &
+    (df["Category"].isin(categories)) &
+    (df["Product"].isin(products))
+]
+
+# -------------------------------------------------
+# KPI SECTION
+# -------------------------------------------------
+total_sales = filtered_df["Sales"].sum()
+total_cost = filtered_df["Cost"].sum()
+total_profit = filtered_df["Profit"].sum()
+total_quantity = filtered_df["Quantity"].sum()
+
+col1, col2, col3, col4 = st.columns(4)
+
+col1.metric(
+    "💰 Total Sales",
+    f"₹{total_sales:,.0f}"
+)
+
+col2.metric(
+    "📦 Units Sold",
+    f"{total_quantity:,}"
+)
+
+col3.metric(
+    "📈 Total Profit",
+    f"₹{total_profit:,.0f}"
+)
+
+col4.metric(
+    "💵 Profit Margin",
+    f"{(total_profit / total_sales * 100):.2f}%"
+)
+
+st.divider()
+
+# -------------------------------------------------
+# SALES TREND
+# -------------------------------------------------
+st.subheader("📈 Monthly Sales Trend")
+
+monthly_sales = (
+    filtered_df
+    .groupby(["Month_Number", "Month"])["Sales"]
+    .sum()
+    .reset_index()
+    .sort_values("Month_Number")
+)
+
+fig1 = px.line(
+    monthly_sales,
+    x="Month",
+    y="Sales",
+    markers=True,
+    title="Monthly Revenue"
+)
+
+fig1.update_layout(
+    xaxis_title="Month",
+    yaxis_title="Sales (₹)"
+)
+
+st.plotly_chart(
+    fig1,
+    use_container_width=True
+)
+
+# -------------------------------------------------
+# TWO CHARTS
+# -------------------------------------------------
+col1, col2 = st.columns(2)
+
+# Product sales
+with col1:
+
+    st.subheader("🏆 Sales by Product")
+
+    product_sales = (
+        filtered_df
+        .groupby("Product")["Sales"]
+        .sum()
+        .reset_index()
+        .sort_values("Sales", ascending=False)
+    )
+
+    fig2 = px.bar(
+        product_sales,
+        x="Product",
+        y="Sales",
+        title="Product-wise Sales"
+    )
+
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
+
+# Region sales
+with col2:
+
+    st.subheader("🌍 Sales by Region")
+
+    region_sales = (
+        filtered_df
+        .groupby("Region")["Sales"]
+        .sum()
+        .reset_index()
+    )
+
+    fig3 = px.pie(
+        region_sales,
+        names="Region",
+        values="Sales",
+        title="Regional Sales Distribution"
+    )
+
+    st.plotly_chart(
+        fig3,
+        use_container_width=True
+    )
+
+# -------------------------------------------------
+# CATEGORY ANALYSIS
+# -------------------------------------------------
+st.subheader("📊 Category Performance")
+
+category_data = (
+    filtered_df
+    .groupby("Category")
+    .agg(
+        Sales=("Sales", "sum"),
+        Profit=("Profit", "sum"),
+        Quantity=("Quantity", "sum")
+    )
+    .reset_index()
+)
+
+fig4 = px.bar(
+    category_data,
+    x="Category",
+    y=["Sales", "Profit"],
+    barmode="group",
+    title="Sales vs Profit by Category"
+)
+
+st.plotly_chart(
+    fig4,
+    use_container_width=True
+)
+
+# -------------------------------------------------
+# TOP PRODUCTS
+# -------------------------------------------------
+st.subheader("🥇 Top Performing Products")
+
+top_products = (
+    filtered_df
+    .groupby("Product")
+    .agg(
+        Sales=("Sales", "sum"),
+        Profit=("Profit", "sum"),
+        Units=("Quantity", "sum")
+    )
+    .reset_index()
+    .sort_values("Sales", ascending=False)
+)
+
+st.dataframe(
+    top_products,
+    use_container_width=True,
+    hide_index=True
+)
+
+# -------------------------------------------------
+# RAW DATA
+# -------------------------------------------------
+with st.expander("📋 View Sales Data"):
+
+    st.dataframe(
+        filtered_df,
+        use_container_width=True,
+        hide_index=True
+    )
+
+# -------------------------------------------------
+# DOWNLOAD DATA
+# -------------------------------------------------
+csv = filtered_df.to_csv(index=False)
+
+st.download_button(
+    label="⬇️ Download Filtered Data",
+    data=csv,
+    file_name="sales_analysis.csv",
+    mime="text/csv"
+)
+
+# -------------------------------------------------
+# FOOTER
+# -------------------------------------------------
+st.divider()
+
+st.caption(
+    "Sales & Revenue Analysis Dashboard | Data Science Internship Project"
+)
